@@ -1,25 +1,42 @@
-// userId → string[] (game ids)
-const store = {};
+const mongoose = require("mongoose");
+
+const favoriteSchema = new mongoose.Schema(
+  {
+    userId:  { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, unique: true },
+    gameIds: { type: [String], default: [] },
+  },
+  { timestamps: true }
+);
+
+const Favorite = mongoose.model("Favorite", favoriteSchema);
 
 const FavoriteModel = {
-  init(userId) {
-    if (!store[userId]) store[userId] = [];
-    return store[userId];
+  async init(userId) {
+    const existing = await Favorite.findOne({ userId });
+    if (existing) return existing.toObject();
+    const fav = await Favorite.create({ userId, gameIds: [] });
+    return fav.toObject();
   },
 
-  getByUserId(userId) {
-    return store[userId] || [];
+  async getByUserId(userId) {
+    const fav = await Favorite.findOne({ userId }).lean();
+    return fav ? fav.gameIds : [];
   },
 
-  toggle(userId, gameId) {
-    if (!store[userId]) store[userId] = [];
-    const list = store[userId];
-    if (list.includes(gameId)) {
-      store[userId] = list.filter((id) => id !== gameId);
-    } else {
-      store[userId].push(gameId);
+  async toggle(userId, gameId) {
+    const fav = await Favorite.findOne({ userId });
+    if (!fav) {
+      const newFav = await Favorite.create({ userId, gameIds: [gameId] });
+      return newFav.gameIds;
     }
-    return store[userId];
+
+    if (fav.gameIds.includes(gameId)) {
+      fav.gameIds = fav.gameIds.filter((id) => id !== gameId);
+    } else {
+      fav.gameIds.push(gameId);
+    }
+    await fav.save();
+    return fav.gameIds;
   },
 };
 

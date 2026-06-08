@@ -1,53 +1,73 @@
-// In-memory user store — swap with DB later
-const users = [];
+const mongoose = require("mongoose");
 
-let uidCounter = 10001;
-const makeUID = () => "U" + (uidCounter++);
+const userSchema = new mongoose.Schema(
+  {
+    username:     { type: String, required: true, unique: true, trim: true, minlength: 3 },
+    mobile:       { type: String, required: true, unique: true },
+    passwordHash: { type: String, required: true },
+    vipLevel:     { type: Number, default: 1 },
+    vipXp:        { type: Number, default: 0 },
+    vipXpNext:    { type: Number, default: 1000 },
+    kycVerified:  { type: Boolean, default: false },
+    referralCode: { type: String },
+    referralLink: { type: String },
+    lastLogin:    { type: String, default: () => new Date().toISOString() },
+  },
+  { timestamps: true }
+);
 
+// Auto-set referralCode = _id string on first save
+userSchema.pre("save", async function () {
+  if (!this.referralCode || this.referralCode === "") {
+    this.referralCode = this._id.toString();
+    this.referralLink = `https://gamezone.pro/?ref=${this._id}`;
+  }
+});
+
+
+const User = mongoose.model("User", userSchema);
+
+// ── Helper wrappers to keep controllers unchanged ─────────
 const UserModel = {
-  getAll:          ()     => users,
-  findById:        (id)   => users.find((u) => u.id === id) || null,
-  findByMobile:    (mob)  => users.find((u) => u.mobile === mob) || null,
-  findByUsername:  (name) => users.find((u) => u.username.toLowerCase() === name.toLowerCase()) || null,
+  async findById(id) {
+    try { return await User.findById(id).lean(); } catch { return null; }
+  },
 
-  create({ username, mobile, passwordHash }) {
-    const uid = makeUID();
-    const user = {
-      id:           uid,
-      username:     username.trim(),
-      mobile,
-      passwordHash,
-      vipLevel:     1,
-      vipXp:        0,
-      vipXpNext:    1000,
-      kycVerified:  false,
-      referralCode: uid,
-      referralLink: `https://gamezone.pro/?ref=${uid}`,
-      lastLogin:    new Date().toISOString(),
-      createdAt:    new Date().toISOString(),
-    };
-    users.push(user);
+  async findByMobile(mobile) {
+    return await User.findOne({ mobile }).lean();
+  },
+
+  async findByUsername(username) {
+    return await User.findOne({ username: { $regex: new RegExp(`^${username}$`, "i") } }).lean();
+  },
+
+  async create({ username, mobile, passwordHash }) {
+    const user = new User({ username, mobile, passwordHash });
+    await user.save(); // pre-save hook sets referralCode
+    return user.toObject();
+  },
+
+  async update(id, fields) {
+    // Never allow overwriting sensitive fields
+    const { passwordHash: _p, _id: _i, mobile: _m, ...safe } = fields;
+    const user = await User.findByIdAndUpdate(id, { $set: safe }, { new: true }).lean();
     return user;
   },
 
-  update(id, fields) {
-    const user = UserModel.findById(id);
-    if (!user) return null;
-    // never allow overwriting sensitive fields from outside
-    const { passwordHash: _p, id: _i, mobile: _m, ...safe } = fields;
-    Object.assign(user, safe);
-    return user;
+  async updatePassword(id, passwordHash) {
+    const result = await User.findByIdAndUpdate(id, { $set: { passwordHash } });
+    return !!result;
   },
 
-  updatePassword(id, passwordHash) {
-    const user = UserModel.findById(id);
-    if (!user) return false;
-    user.passwordHash = passwordHash;
-    return true;
+  async updateLastLogin(id) {
+    await User.findByIdAndUpdate(id, { $set: { lastLogin: new Date().toISOString() } });
   },
 
   safe(user) {
-    const { passwordHash: _, ...rest } = user;
+    if (!user) return null;
+    const { passwordHash: _, __v, ...rest } = user;
+    // Normalize _id → id for frontend
+    if (rest._id) { rest.id = rest._id.toString(); delete rest._id; }
     return rest;
   },
 };

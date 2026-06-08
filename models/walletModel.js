@@ -1,47 +1,71 @@
+const mongoose = require("mongoose");
 const { WELCOME_BONUS } = require("../config/constants");
 
-// userId → { balance, withdrawable }
-const wallets = {};
+const walletSchema = new mongoose.Schema(
+  {
+    userId:       { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, unique: true },
+    balance:      { type: Number, default: WELCOME_BONUS },
+    withdrawable: { type: Number, default: 0 },
+  },
+  { timestamps: true }
+);
+
+const Wallet = mongoose.model("Wallet", walletSchema);
 
 const WalletModel = {
-  getByUserId(userId) {
-    return wallets[userId] || null;
+  async getByUserId(userId) {
+    return await Wallet.findOne({ userId }).lean();
   },
 
-  init(userId) {
-    if (!wallets[userId]) {
-      wallets[userId] = { balance: WELCOME_BONUS, withdrawable: 0 };
-    }
-    return wallets[userId];
+  async init(userId) {
+    const existing = await Wallet.findOne({ userId });
+    if (existing) return existing.toObject();
+    const wallet = await Wallet.create({ userId, balance: WELCOME_BONUS, withdrawable: 0 });
+    return wallet.toObject();
   },
 
-  deposit(userId, amount) {
-    const w = wallets[userId];
-    w.balance      += amount;
-    w.withdrawable += Math.floor(amount * 0.5);
-    return w;
+  async deposit(userId, amount) {
+    const wallet = await Wallet.findOneAndUpdate(
+      { userId },
+      { $inc: { balance: amount, withdrawable: Math.floor(amount * 0.5) } },
+      { new: true, upsert: true }
+    ).lean();
+    return wallet;
   },
 
-  withdraw(userId, amount) {
-    const w = wallets[userId];
-    if (amount > w.withdrawable) return null; // insufficient
-    w.balance      -= amount;
-    w.withdrawable -= amount;
-    return w;
+  async withdraw(userId, amount) {
+    // Check sufficient withdrawable balance first
+    const current = await Wallet.findOne({ userId }).lean();
+    if (!current || amount > current.withdrawable) return null;
+
+    const wallet = await Wallet.findOneAndUpdate(
+      { userId },
+      { $inc: { balance: -amount, withdrawable: -amount } },
+      { new: true }
+    ).lean();
+    return wallet;
   },
 
-  deductBet(userId, amount) {
-    const w = wallets[userId];
-    if (amount > w.balance) return null; // insufficient
-    w.balance -= amount;
-    return w;
+  async deductBet(userId, amount) {
+    // Check sufficient balance first
+    const current = await Wallet.findOne({ userId }).lean();
+    if (!current || amount > current.balance) return null;
+
+    const wallet = await Wallet.findOneAndUpdate(
+      { userId },
+      { $inc: { balance: -amount } },
+      { new: true }
+    ).lean();
+    return wallet;
   },
 
-  creditWin(userId, amount) {
-    const w = wallets[userId];
-    w.balance      += amount;
-    w.withdrawable += Math.floor(amount * 0.3);
-    return w;
+  async creditWin(userId, amount) {
+    const wallet = await Wallet.findOneAndUpdate(
+      { userId },
+      { $inc: { balance: amount, withdrawable: Math.floor(amount * 0.3) } },
+      { new: true, upsert: true }
+    ).lean();
+    return wallet;
   },
 };
 

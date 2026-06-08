@@ -1,25 +1,18 @@
 const UserModel          = require("../models/userModel");
 const { success, error } = require("../utils/response");
 
-// Per-user referral stats (in-memory, grows over time)
-const referralStats = {};
-
-const initStats = (userId) => {
-  if (!referralStats[userId]) {
-    referralStats[userId] = { totalEarned: 0, todayTeam: 0, directRefs: 0 };
-  }
-  return referralStats[userId];
-};
-
-const getReferralStats = (req, res) => {
+const getReferralStats = async (req, res) => {
   try {
-    const user  = UserModel.findById(req.userId);
+    const user = await UserModel.findById(req.userId);
     if (!user) return error(res, "User not found", 404);
-    const stats = initStats(req.userId);
+
+    // Referral stats — extend this with a real ReferralModel if needed
     return success(res, {
-      ...stats,
-      link: user.referralLink,
-      code: user.referralCode,
+      totalEarned: 0,
+      todayTeam:   0,
+      directRefs:  0,
+      link:        user.referralLink || `https://gamezone.pro/?ref=${user.referralCode}`,
+      code:        user.referralCode || (user._id || user.id).toString(),
     });
   } catch (e) {
     return error(res, e.message, 500);

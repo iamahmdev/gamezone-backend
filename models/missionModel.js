@@ -1,46 +1,83 @@
-// userId → Mission[]
-const store = {};
+const mongoose = require("mongoose");
 
-const DEFAULT_MISSIONS = () => [
-  { id: 1, title: "Recharge ₹500",            reward: 50,  done: false, claimed: false },
-  { id: 2, title: "Play 10 rounds of Aviator", reward: 25,  done: false, claimed: false },
-  { id: 3, title: "Invite 1 friend",           reward: 100, done: false, claimed: false },
-  { id: 4, title: "Win 3 rounds in Wingo",     reward: 30,  done: false, claimed: false },
-  { id: 5, title: "Daily check-in",            reward: 10,  done: false, claimed: false },
+const missionSchema = new mongoose.Schema(
+  {
+    userId:  { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    missionId: { type: Number, required: true },
+    title:   { type: String, required: true },
+    reward:  { type: Number, required: true },
+    done:    { type: Boolean, default: false },
+    claimed: { type: Boolean, default: false },
+  },
+  { timestamps: true }
+);
+
+missionSchema.index({ userId: 1, missionId: 1 }, { unique: true });
+
+const Mission = mongoose.model("Mission", missionSchema);
+
+const DEFAULT_MISSIONS = [
+  { missionId: 1, title: "Recharge ₹500",            reward: 50  },
+  { missionId: 2, title: "Play 10 rounds of Aviator", reward: 25  },
+  { missionId: 3, title: "Invite 1 friend",           reward: 100 },
+  { missionId: 4, title: "Win 3 rounds in Wingo",     reward: 30  },
+  { missionId: 5, title: "Daily check-in",            reward: 10  },
 ];
 
 const MissionModel = {
-  init(userId) {
-    if (!store[userId]) store[userId] = DEFAULT_MISSIONS();
-    return store[userId];
+  async init(userId) {
+    const existing = await Mission.find({ userId }).lean();
+    if (existing.length > 0) return existing;
+
+    const docs = DEFAULT_MISSIONS.map((m) => ({ ...m, userId, done: false, claimed: false }));
+    await Mission.insertMany(docs);
+    return await Mission.find({ userId }).lean();
   },
 
-  getByUserId(userId) {
-    return store[userId] || [];
+  async getByUserId(userId) {
+    const missions = await Mission.find({ userId }).sort({ missionId: 1 }).lean();
+    // Return in frontend-friendly format (id instead of missionId)
+    return missions.map((m) => ({
+      id:      m.missionId,
+      title:   m.title,
+      reward:  m.reward,
+      done:    m.done,
+      claimed: m.claimed,
+    }));
   },
 
-  findOne(userId, missionId) {
-    return (store[userId] || []).find((m) => m.id === missionId) || null;
+  async findOne(userId, missionId) {
+    return await Mission.findOne({ userId, missionId }).lean();
   },
 
-  claim(userId, missionId) {
-    const mission = MissionModel.findOne(userId, missionId);
+  async claim(userId, missionId) {
+    const mission = await Mission.findOne({ userId, missionId });
     if (!mission) return { error: "Mission not found" };
     if (!mission.done)   return { error: "Mission not completed yet" };
     if (mission.claimed) return { error: "Already claimed" };
+
     mission.claimed = true;
-    return { mission };
+    await mission.save();
+    return {
+      mission: {
+        id:      mission.missionId,
+        title:   mission.title,
+        reward:  mission.reward,
+        done:    mission.done,
+        claimed: mission.claimed,
+      },
+    };
   },
 
-  // Mark a mission as done (call when player achieves it)
-  markDone(userId, missionId) {
-    const mission = MissionModel.findOne(userId, missionId);
-    if (mission) mission.done = true;
+  async markDone(userId, missionId) {
+    await Mission.findOneAndUpdate(
+      { userId, missionId },
+      { $set: { done: true } }
+    );
   },
 
-  // Checkin shortcut — mark mission 5 (daily check-in) done
-  checkIn(userId) {
-    MissionModel.markDone(userId, 5);
+  async checkIn(userId) {
+    await MissionModel.markDone(userId, 5);
   },
 };
 

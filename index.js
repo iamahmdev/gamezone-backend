@@ -1,8 +1,11 @@
 require("dotenv").config();
-const express = require("express");
-const cors    = require("cors");
-const { PORT } = require("./config/constants");
-const StatsModel = require("./models/statsModel");
+const express       = require("express");
+const cors          = require("cors");
+const helmet        = require("helmet");
+const rateLimit     = require("express-rate-limit");
+const connectDB     = require("./config/db");
+const { PORT }      = require("./config/constants");
+const StatsModel    = require("./models/statsModel");
 
 // ── Routes ────────────────────────────────────────────────
 const authRoutes        = require("./routes/authRoutes");
@@ -17,31 +20,65 @@ const favoriteRoutes    = require("./routes/favoriteRoutes");
 
 const app = express();
 
-// ── Global Middleware ─────────────────────────────────────
+// ── Security headers ──────────────────────────────────────
+app.use(helmet());
+
+// ── CORS ──────────────────────────────────────────────────
 app.use(cors({
   origin: (origin, cb) => {
-    // Allow requests with no origin (mobile apps, curl, Postman)
     if (!origin) return cb(null, true);
-    // Allow any localhost port in development
     if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return cb(null, true);
-    // Allow custom FRONTEND_URL from env
+    if (/^https:\/\/.*\.vercel\.app$/.test(origin)) return cb(null, true);
     const allowed = process.env.FRONTEND_URL
       ? process.env.FRONTEND_URL.split(",").map((o) => o.trim())
       : [];
     if (allowed.includes(origin)) return cb(null, true);
+    console.warn("[CORS] Blocked origin:", origin);
     return cb(new Error("CORS: origin not allowed — " + origin));
   },
   credentials: true,
 }));
-app.use(express.json());
+
+// ── Body parser ───────────────────────────────────────────
+app.use(express.json({ limit: "10kb" }));
+
+// ── Rate Limiters ─────────────────────────────────────────
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: "Too many requests, please try again later." },
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: "Too many auth attempts, please try again in 15 minutes." },
+});
+
+app.use(globalLimiter);
+
+// ── DB middleware — connect before every request on Vercel ─
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    console.error("[DB] Connection failed:", err.message);
+    res.status(500).json({ ok: false, error: "Database connection failed" });
+  }
+});
 
 // ── Health ────────────────────────────────────────────────
 app.get("/", (req, res) =>
-  res.json({ status: "ok", message: "GameZone API running", version: "2.0" })
+  res.json({ status: "ok", message: "GameZone API running", version: "3.0" })
 );
 
 // ── API Routes ────────────────────────────────────────────
-app.use("/api/auth",         authRoutes);
+app.use("/api/auth",         authLimiter, authRoutes);
 app.use("/api/games",        gameRoutes);
 app.use("/api/stats",        statsRoutes);
 app.use("/api/user",         userRoutes);
@@ -56,29 +93,19 @@ app.use((req, res) =>
   res.status(404).json({ ok: false, error: `Route ${req.method} ${req.path} not found` })
 );
 
-// ── Live stats ticker ─────────────────────────────────────
-setInterval(() => StatsModel.tick(), 10000);
-
-// ── Start ─────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`\n🚀  GameZone API  →  http://localhost:${PORT}\n`);
-  console.log("  PUBLIC:");
-  console.log("    POST  /api/auth/register");
-  console.log("    POST  /api/auth/login");
-  console.log("    GET   /api/games");
-  console.log("    GET   /api/stats");
-  console.log("\n  PROTECTED (Bearer token):");
-  console.log("    GET   /api/auth/me");
-  console.log("    POST  /api/auth/change-password");
-  console.log("    GET   /api/user/profile");
-  console.log("    GET   /api/wallet");
-  console.log("    POST  /api/wallet/deposit");
-  console.log("    POST  /api/wallet/withdraw");
-  console.log("    POST  /api/wallet/bet");
-  console.log("    GET   /api/transactions");
-  console.log("    GET   /api/missions");
-  console.log("    POST  /api/missions/:id/claim");
-  console.log("    GET   /api/referral");
-  console.log("    GET   /api/favorites");
-  console.log("    POST  /api/favorites/toggle\n");
+// ── Global error handler ──────────────────────────────────
+app.use((err, req, res, next) => {
+  console.error("[ERROR]", err);
+  res.status(500).json({ ok: false, error: "Internal server error" });
 });
+
+// ── Local dev server only ─────────────────────────────────
+if (process.env.NODE_ENV !== "production") {
+  connectDB().then(() => {
+    app.listen(PORT, () => {
+      console.log(`\n🚀  GameZone API  →  http://localhost:${PORT}\n`);
+    });
+  }).catch(console.error);
+}
+
+module.exports = app;

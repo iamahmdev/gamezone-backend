@@ -3,23 +3,23 @@ const WalletModel        = require("../models/walletModel");
 const TransactionModel   = require("../models/transactionModel");
 const { success, error } = require("../utils/response");
 
-const getMissions = (req, res) => {
+const getMissions = async (req, res) => {
   try {
-    const missions = MissionModel.getByUserId(req.userId);
+    const missions = await MissionModel.getByUserId(req.userId);
     return success(res, missions);
   } catch (e) {
     return error(res, e.message, 500);
   }
 };
 
-const claimMission = (req, res) => {
+const claimMission = async (req, res) => {
   try {
     const missionId = Number(req.params.id);
-    const result    = MissionModel.claim(req.userId, missionId);
+    const result    = await MissionModel.claim(req.userId, missionId);
     if (result.error) return error(res, result.error);
 
-    const wallet = WalletModel.creditWin(req.userId, result.mission.reward);
-    const tx     = TransactionModel.create(req.userId, {
+    const wallet = await WalletModel.creditWin(req.userId, result.mission.reward);
+    const tx     = await TransactionModel.create(req.userId, {
       type: "mission",
       label: `Mission Reward: ${result.mission.title}`,
       amount: result.mission.reward,

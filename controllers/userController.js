@@ -1,9 +1,9 @@
 const UserModel          = require("../models/userModel");
 const { success, error } = require("../utils/response");
 
-const getProfile = (req, res) => {
+const getProfile = async (req, res) => {
   try {
-    const user = UserModel.findById(req.userId);
+    const user = await UserModel.findById(req.userId);
     if (!user) return error(res, "User not found", 404);
     return success(res, UserModel.safe(user));
   } catch (e) {
@@ -11,9 +11,9 @@ const getProfile = (req, res) => {
   }
 };
 
-const updateProfile = (req, res) => {
+const updateProfile = async (req, res) => {
   try {
-    const updated = UserModel.update(req.userId, req.body);
+    const updated = await UserModel.update(req.userId, req.body);
     if (!updated) return error(res, "User not found", 404);
     return success(res, UserModel.safe(updated));
   } catch (e) {
