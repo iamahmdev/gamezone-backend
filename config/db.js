@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 let isConnected = false;
 
 const connectDB = async () => {
-  // Reuse existing connection (important for Vercel serverless)
+  // Reuse existing connection (critical for Vercel serverless cold starts)
   if (isConnected && mongoose.connection.readyState === 1) {
     return;
   }
@@ -14,9 +14,11 @@ const connectDB = async () => {
   }
 
   await mongoose.connect(uri, {
-    serverSelectionTimeoutMS: 10000,
-    socketTimeoutMS: 45000,
+    serverSelectionTimeoutMS: 30000, // 30s — enough for cold start
+    socketTimeoutMS: 60000,
+    connectTimeoutMS: 30000,
     bufferCommands: false,
+    maxPoolSize: 10,
   });
 
   isConnected = true;

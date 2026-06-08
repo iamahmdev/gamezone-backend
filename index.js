@@ -68,7 +68,14 @@ app.use(async (req, res, next) => {
     next();
   } catch (err) {
     console.error("[DB] Connection failed:", err.message);
-    res.status(500).json({ ok: false, error: "Database connection failed" });
+    // Retry once
+    try {
+      await connectDB();
+      next();
+    } catch (err2) {
+      console.error("[DB] Retry failed:", err2.message);
+      res.status(500).json({ ok: false, error: "Database connection failed. Please try again." });
+    }
   }
 });
 
