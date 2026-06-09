@@ -5,9 +5,7 @@ const helmet        = require("helmet");
 const rateLimit     = require("express-rate-limit");
 const connectDB     = require("./config/db");
 const { PORT }      = require("./config/constants");
-const StatsModel    = require("./models/statsModel");
 
-// ── Routes ────────────────────────────────────────────────
 const authRoutes        = require("./routes/authRoutes");
 const gameRoutes        = require("./routes/gameRoutes");
 const statsRoutes       = require("./routes/statsRoutes");
@@ -19,7 +17,6 @@ const referralRoutes    = require("./routes/referralRoutes");
 const favoriteRoutes    = require("./routes/favoriteRoutes");
 
 const app = express();
-
 app.use(helmet());
 
 app.use(cors({
@@ -27,7 +24,6 @@ app.use(cors({
     if (!origin) return cb(null, true);
     if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return cb(null, true);
     if (/^https:\/\/.*\.vercel\.app$/.test(origin)) return cb(null, true);
-    if (/^https:\/\/.*\.onrender\.com$/.test(origin)) return cb(null, true);
     const allowed = process.env.FRONTEND_URL
       ? process.env.FRONTEND_URL.split(",").map((o) => o.trim())
       : [];
@@ -51,12 +47,12 @@ const authLimiter = rateLimit({
 });
 app.use(globalLimiter);
 
-// ── Health check (no DB needed) ───────────────────────────
+// ── Health (no DB needed) ─────────────────────────────────
 app.get("/", (req, res) =>
   res.json({ status: "ok", message: "GameZone API running", version: "3.0" })
 );
 
-// ── DB Middleware ─────────────────────────────────────────
+// ── DB middleware ─────────────────────────────────────────
 app.use(async (req, res, next) => {
   try {
     await connectDB();
@@ -67,7 +63,7 @@ app.use(async (req, res, next) => {
   }
 });
 
-// ── API Routes ────────────────────────────────────────────
+// ── Routes ────────────────────────────────────────────────
 app.use("/api/auth",         authLimiter, authRoutes);
 app.use("/api/games",        gameRoutes);
 app.use("/api/stats",        statsRoutes);
@@ -87,16 +83,11 @@ app.use((err, req, res, next) => {
   res.status(500).json({ ok: false, error: "Internal server error" });
 });
 
-// ── Always start server (Render/Railway/local) ────────────
-connectDB()
-  .then(() => {
-    app.listen(PORT, () => {
-      console.log(`\n🚀  GameZone API  →  http://localhost:${PORT}\n`);
-    });
-  })
-  .catch((err) => {
-    console.error("DB connection failed:", err.message);
-    process.exit(1);
-  });
+// Local dev only
+if (!process.env.VERCEL) {
+  connectDB().then(() => {
+    app.listen(PORT, () => console.log(`🚀 GameZone API → http://localhost:${PORT}`));
+  }).catch(console.error);
+}
 
 module.exports = app;

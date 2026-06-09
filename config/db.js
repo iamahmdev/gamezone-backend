@@ -1,24 +1,39 @@
 const mongoose = require("mongoose");
 
-let isConnected = false;
+// Keep connection reference across serverless invocations
+let cached = global.mongoose;
+if (!cached) cached = global.mongoose = { conn: null, promise: null };
 
 const connectDB = async () => {
-  if (isConnected && mongoose.connection.readyState === 1) return;
-
-  isConnected = false;
+  // Already connected — return immediately
+  if (cached.conn && mongoose.connection.readyState === 1) {
+    return cached.conn;
+  }
 
   const uri = process.env.MONGODB_URI;
   if (!uri) throw new Error("MONGODB_URI is not set");
 
-  await mongoose.connect(uri, {
-    serverSelectionTimeoutMS: 30000,
-    socketTimeoutMS: 60000,
-    connectTimeoutMS: 30000,
-    maxPoolSize: 10,
-  });
+  // If a connection is already in progress — wait for it
+  if (!cached.promise) {
+    cached.promise = mongoose
+      .connect(uri, {
+        serverSelectionTimeoutMS: 30000,
+        socketTimeoutMS: 45000,
+        maxPoolSize: 10,
+      })
+      .then((m) => {
+        console.log("✅ MongoDB connected");
+        return m;
+      })
+      .catch((err) => {
+        // Reset so next request tries again
+        cached.promise = null;
+        throw err;
+      });
+  }
 
-  isConnected = true;
-  console.log(`✅  MongoDB connected → ${mongoose.connection.host}`);
+  cached.conn = await cached.promise;
+  return cached.conn;
 };
 
 module.exports = connectDB;
