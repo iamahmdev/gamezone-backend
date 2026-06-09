@@ -17,9 +17,9 @@ const games = [
   { id:"4",  name:"Dice",        slug:"dice",    category:"dice",    badge:null,   online:612,  gradient:"from-indigo-500 to-purple-600",   emoji:"🎯",  popular:true  },
 
   // ── Casino ─────────────────────────────────────────────────────────────────
-  { id:"6",  name:"Andar Bahar", slug:"andarbahar", category:"casino", badge:null, online:312, gradient:"from-cyan-500 to-blue-600",       emoji:"🃏",  popular:false },
-  { id:"7",  name:"Roulette",    slug:"roulette",   category:"casino", badge:null, online:221, gradient:"from-rose-600 to-red-800",        emoji:"🎰",  popular:false },
-  { id:"12", name:"Wheel",       slug:"wheel",      category:"casino", badge:null, online:156, gradient:"from-amber-500 to-pink-600",      emoji:"🎡",  popular:false },
+  { id:"6",  name:"Andar Bahar", slug:"andarbahar", category:"casino", badge:"hot",  online:1312, gradient:"from-cyan-500 to-blue-600",    emoji:"🃏",  popular:true  },
+  { id:"7",  name:"Roulette",    slug:"roulette",   category:"casino", badge:"hot",  online:1221, gradient:"from-rose-600 to-red-800",     emoji:"🎰",  popular:true  },
+  { id:"12", name:"Lucky Wheel", slug:"wheel",      category:"casino", badge:"new",  online:956,  gradient:"from-amber-500 to-pink-600",   emoji:"🎡",  popular:true  },
 ];
 
 const GameModel = {

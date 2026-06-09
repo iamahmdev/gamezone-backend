@@ -241,6 +241,24 @@ const getGameResult = async (req, res) => {
         result = { slot: pos, multiplier, rows, serverSeed, hash };
         break;
       }
+      case "andarbahar": {
+        // Andar Bahar — 0=andar wins, 1=bahar wins
+        const abResult = parseInt(hash.slice(0, 8), 16) % 2;
+        result = { num: abResult, serverSeed, hash };
+        break;
+      }
+      case "roulette": {
+        // European Roulette 0-36
+        const rouNum = Math.floor(float * 37); // 0 to 36
+        result = { num: rouNum, serverSeed, hash };
+        break;
+      }
+      case "wheel": {
+        // Lucky Wheel — 16 segments
+        const wheelIdx = Math.floor(float * 16);
+        result = { num: wheelIdx, serverSeed, hash };
+        break;
+      }
       case "mines": {
         // Generate mine positions for a 5×5 grid
         const { numMines = 3 } = req.body;
