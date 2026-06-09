@@ -4,8 +4,9 @@ const { success, error } = require("../utils/response");
 
 const getFavorites = async (req, res) => {
   try {
-    const ids   = await FavoriteModel.getByUserId(req.userId);
-    const games = GameModel.getAll().filter((g) => ids.includes(g.id));
+    const ids      = await FavoriteModel.getByUserId(req.userId);
+    const allGames = await GameModel.getAll();
+    const games    = allGames.filter((g) => ids.includes(g.id));
     return success(res, { ids, games });
   } catch (e) {
     return error(res, e.message, 500);
