@@ -4,10 +4,11 @@ const WalletModel      = require("../models/walletModel");
 const TransactionModel = require("../models/transactionModel");
 const MissionModel     = require("../models/missionModel");
 const FavoriteModel    = require("../models/favoriteModel");
+const ReferralModel    = require("../models/referralModel");
 const { signToken }    = require("../utils/jwt");
 const { validateRegister, validateLogin } = require("../utils/validators");
 const { success, error } = require("../utils/response");
-const { BCRYPT_ROUNDS, WELCOME_BONUS } = require("../config/constants");
+const { BCRYPT_ROUNDS, WELCOME_BONUS, ADMIN_MOBILES } = require("../config/constants");
 
 // POST /api/auth/register
 const register = async (req, res) => {
@@ -15,7 +16,7 @@ const register = async (req, res) => {
     const err = validateRegister(req.body);
     if (err) return error(res, err);
 
-    const { username, mobile, password } = req.body;
+    const { username, mobile, password, refCode } = req.body;
 
     if (await UserModel.findByMobile(mobile))
       return error(res, "Mobile number already registered", 409);
@@ -24,22 +25,34 @@ const register = async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     const user         = await UserModel.create({ username, mobile, passwordHash });
+    const userId       = (user._id || user.id).toString();
 
     // Init all user data in parallel
     await Promise.all([
-      WalletModel.init(user._id || user.id),
-      MissionModel.init(user._id || user.id),
-      FavoriteModel.init(user._id || user.id),
+      WalletModel.init(userId),
+      MissionModel.init(userId),
+      FavoriteModel.init(userId),
     ]);
 
     // Welcome bonus transaction
-    await TransactionModel.create(user._id || user.id, {
+    await TransactionModel.create(userId, {
       type: "deposit", label: "Welcome Bonus",
       amount: WELCOME_BONUS, positive: true,
     });
 
-    const wallet = await WalletModel.getByUserId(user._id || user.id);
-    const token  = signToken((user._id || user.id).toString());
+    // Handle referral code if provided
+    if (refCode && refCode !== userId) {
+      const referrer = await UserModel.findById(refCode);
+      if (referrer) {
+        const referrerId = (referrer._id || referrer.id).toString();
+        await ReferralModel.record(referrerId, userId);
+        // Mark mission 3 (invite 1 friend) as done for referrer
+        await MissionModel.markDone(referrerId, 3).catch(() => {});
+      }
+    }
+
+    const wallet = await WalletModel.getByUserId(userId);
+    const token  = signToken(userId);
 
     return success(res, { token, user: UserModel.safe(user), wallet }, 201);
   } catch (e) {
@@ -61,7 +74,16 @@ const login = async (req, res) => {
     const match = await bcrypt.compare(password, user.passwordHash);
     if (!match) return error(res, "Invalid mobile or password", 401);
 
+    if (user.isBanned)
+      return error(res, "Your account has been suspended. Contact admin.", 403);
+
     const userId = (user._id || user.id).toString();
+
+    // Auto-promote to admin if mobile is in ADMIN_MOBILES env list
+    if (ADMIN_MOBILES.length > 0 && ADMIN_MOBILES.includes(mobile) && !user.isAdmin) {
+      await UserModel.setAdmin(userId, true);
+      user.isAdmin = true;
+    }
 
     // Ensure related data exists (first-time safety)
     await Promise.all([

@@ -1,4 +1,11 @@
 require("dotenv").config();
+
+// ── Startup environment validation ───────────────────────────────────────────
+if (!process.env.JWT_SECRET || !process.env.ADMIN_SECRET_KEY || !process.env.MONGODB_URI) {
+  console.error("FATAL: Required environment variables missing: JWT_SECRET, ADMIN_SECRET_KEY, MONGODB_URI");
+  if (!process.env.VERCEL) process.exit(1); // don't crash on Vercel edge (shows a nicer error)
+}
+
 const express       = require("express");
 const cors          = require("cors");
 const helmet        = require("helmet");
@@ -15,6 +22,7 @@ const transactionRoutes = require("./routes/transactionRoutes");
 const missionRoutes     = require("./routes/missionRoutes");
 const referralRoutes    = require("./routes/referralRoutes");
 const favoriteRoutes    = require("./routes/favoriteRoutes");
+const adminRoutes       = require("./routes/adminRoutes");
 
 const app = express();
 app.use(helmet());
@@ -73,6 +81,7 @@ app.use("/api/transactions", transactionRoutes);
 app.use("/api/missions",     missionRoutes);
 app.use("/api/referral",     referralRoutes);
 app.use("/api/favorites",    favoriteRoutes);
+app.use("/api/admin",        adminRoutes);
 
 app.use((req, res) =>
   res.status(404).json({ ok: false, error: `Route ${req.method} ${req.path} not found` })

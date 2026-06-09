@@ -1,22 +1,48 @@
-const GameModel = require("./gameModel");
+const mongoose = require("mongoose");
+const Transaction = mongoose.model
+  ? (mongoose.models.Transaction || require("./transactionModel")._model)
+  : null;
 
-const stats = {
-  onlineNow:     6842,
-  todayWinners:  1234,
-  bigWin:        99000,
-};
-
+// Real stats pulled from MongoDB
 const StatsModel = {
-  get() {
-    return { ...stats };
+  async get() {
+    try {
+      const Transaction = require("mongoose").model("Transaction");
+      const start = new Date(); start.setHours(0, 0, 0, 0);
+
+      const [onlineNow, todayWinners, bigWinResult] = await Promise.all([
+        // Unique users who placed a bet in last 10 minutes
+        Transaction.distinct("userId", {
+          type: "bet",
+          createdAt: { $gte: new Date(Date.now() - 10 * 60 * 1000) },
+        }).then(arr => Math.max(arr.length, 5)),
+
+        // Unique users who had a win today
+        Transaction.distinct("userId", {
+          type: "win",
+          createdAt: { $gte: start },
+        }).then(arr => arr.length),
+
+        // Biggest single win today
+        Transaction.findOne({ type: "win", createdAt: { $gte: start } })
+          .sort({ amount: -1 })
+          .select("amount")
+          .lean(),
+      ]);
+
+      return {
+        onlineNow:    Math.max(onlineNow, 5),
+        todayWinners: todayWinners,
+        bigWin:       bigWinResult?.amount || 0,
+      };
+    } catch {
+      // Fallback if DB not ready yet
+      return { onlineNow: 12, todayWinners: 3, bigWin: 0 };
+    }
   },
 
-  tick() {
-    stats.onlineNow    = 6000 + Math.floor(Math.random() * 1500);
-    stats.todayWinners += Math.floor(Math.random() * 3);
-    if (stats.bigWin < 500000) stats.bigWin += Math.floor(Math.random() * 500);
-    GameModel.tickOnline();
-  },
+  // kept for backward compat — no longer used
+  tick() {},
 };
 
 module.exports = StatsModel;

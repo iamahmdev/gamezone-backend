@@ -9,6 +9,9 @@ const userSchema = new mongoose.Schema(
     vipXp:        { type: Number, default: 0 },
     vipXpNext:    { type: Number, default: 1000 },
     kycVerified:  { type: Boolean, default: false },
+    isAdmin:      { type: Boolean, default: false },
+    isBanned:     { type: Boolean, default: false },
+    banReason:    { type: String, default: "" },
     referralCode: { type: String },
     referralLink: { type: String },
     lastLogin:    { type: String, default: () => new Date().toISOString() },
@@ -61,6 +64,42 @@ const UserModel = {
 
   async updateLastLogin(id) {
     await User.findByIdAndUpdate(id, { $set: { lastLogin: new Date().toISOString() } });
+  },
+
+  async findAll({ page = 1, limit = 20, search = "" } = {}) {
+    const skip   = (page - 1) * limit;
+    const filter = search
+      ? { $or: [
+          { username: { $regex: search, $options: "i" } },
+          { mobile:   { $regex: search, $options: "i" } },
+        ]}
+      : {};
+    const [users, total] = await Promise.all([
+      User.find(filter).select("-passwordHash").sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      User.countDocuments(filter),
+    ]);
+    return { users: users.map((u) => UserModel.safe(u)), total, page, pages: Math.ceil(total / limit) };
+  },
+
+  async banUser(id, reason = "") {
+    return await User.findByIdAndUpdate(id, { $set: { isBanned: true, banReason: reason } }, { new: true }).lean();
+  },
+
+  async unbanUser(id) {
+    return await User.findByIdAndUpdate(id, { $set: { isBanned: false, banReason: "" } }, { new: true }).lean();
+  },
+
+  async setAdmin(id, isAdmin) {
+    return await User.findByIdAndUpdate(id, { $set: { isAdmin } }, { new: true }).lean();
+  },
+
+  async countAll() {
+    return await User.countDocuments();
+  },
+
+  async countNewToday() {
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    return await User.countDocuments({ createdAt: { $gte: start } });
   },
 
   safe(user) {
