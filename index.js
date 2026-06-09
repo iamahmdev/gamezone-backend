@@ -7,6 +7,13 @@ const connectDB     = require("./config/db");
 const { PORT }      = require("./config/constants");
 const StatsModel    = require("./models/statsModel");
 
+// ── Connect DB immediately at module load (Vercel cold start fix) ──
+// This starts the connection as soon as the function loads,
+// so by the time a request arrives, DB is likely already connected.
+const dbPromise = connectDB().catch((err) => {
+  console.error("[DB] Initial connection error:", err.message);
+});
+
 // ── Routes ────────────────────────────────────────────────
 const authRoutes        = require("./routes/authRoutes");
 const gameRoutes        = require("./routes/gameRoutes");
@@ -34,7 +41,7 @@ app.use(cors({
       : [];
     if (allowed.includes(origin)) return cb(null, true);
     console.warn("[CORS] Blocked origin:", origin);
-    return cb(new Error("CORS: origin not allowed — " + origin));
+    return cb(new Error("CORS: origin not allowed"));
   },
   credentials: true,
 }));
@@ -61,20 +68,23 @@ const authLimiter = rateLimit({
 
 app.use(globalLimiter);
 
-// ── DB middleware — connect before every request on Vercel ─
+// ── DB middleware — wait for connection before handling request ────
 app.use(async (req, res, next) => {
   try {
+    // Wait for the initial connection promise (already started at module load)
+    await dbPromise;
+    // Ensure still connected (reconnect if dropped)
     await connectDB();
     next();
   } catch (err) {
-    console.error("[DB] Connection failed:", err.message);
-    // Retry once
+    console.error("[DB] Connection error:", err.message);
+    // Last resort retry with fresh connect
     try {
       await connectDB();
       next();
     } catch (err2) {
-      console.error("[DB] Retry failed:", err2.message);
-      res.status(500).json({ ok: false, error: "Database connection failed. Please try again." });
+      console.error("[DB] Final retry failed:", err2.message);
+      res.status(500).json({ ok: false, error: "Service temporarily unavailable. Please try again in a moment." });
     }
   }
 });
@@ -108,11 +118,21 @@ app.use((err, req, res, next) => {
 
 // ── Local dev server only ─────────────────────────────────
 if (process.env.NODE_ENV !== "production") {
-  connectDB().then(() => {
+  dbPromise.then(() => {
     app.listen(PORT, () => {
       console.log(`\n🚀  GameZone API  →  http://localhost:${PORT}\n`);
     });
   }).catch(console.error);
+} else {
+  // Railway / any always-on server — start listening
+  dbPromise.then(() => {
+    app.listen(PORT, () => {
+      console.log(`\n🚀  GameZone API running on port ${PORT}\n`);
+    });
+  }).catch((err) => {
+    console.error("Failed to connect DB:", err.message);
+    process.exit(1);
+  });
 }
 
 module.exports = app;
