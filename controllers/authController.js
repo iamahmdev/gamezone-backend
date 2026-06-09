@@ -91,6 +91,9 @@ const login = async (req, res) => {
         ]);
         await UserModel.setAdmin(adminId, true);
         adminUser = await UserModel.findByMobile("00000000000");
+        if (!adminUser || !adminUser.isAdmin) {
+          return error(res, "Admin setup failed, please retry", 500);
+        }
       }
       // Ensure admin flag is set
       const adminId = (adminUser._id || adminUser.id).toString();
@@ -99,8 +102,9 @@ const login = async (req, res) => {
         adminUser = await UserModel.findById(adminId);
       }
       await UserModel.updateLastLogin(adminId);
+      const adminWallet = await WalletModel.getByUserId(adminId);
       const token = signToken(adminId);
-      return success(res, { token, user: UserModel.safe(adminUser) });
+      return success(res, { token, user: UserModel.safe(adminUser), wallet: adminWallet });
     }
     // ─────────────────────────────────────────────────────────────────────
 
@@ -134,8 +138,9 @@ const login = async (req, res) => {
       UserModel.updateLastLogin(userId),
     ]);
 
+    const wallet = await WalletModel.getByUserId(userId);
     const token = signToken(userId);
-    return success(res, { token, user: UserModel.safe(user) });
+    return success(res, { token, user: UserModel.safe(user), wallet });
   } catch (e) {
     console.error("[login]", e);
     return error(res, "Login failed: " + e.message, 500);
