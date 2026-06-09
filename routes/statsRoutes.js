@@ -1,6 +1,7 @@
 const router = require("express").Router();
-const { getLiveStats } = require("../controllers/statsController");
+const { getLiveStats, getRecentWinners } = require("../controllers/statsController");
 
-router.get("/", getLiveStats);
+router.get("/",       getLiveStats);
+router.get("/winners", getRecentWinners);
 
 module.exports = router;

@@ -44,9 +44,20 @@ app.use(cors({
 app.use(express.json({ limit: "10kb" }));
 
 const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, max: 200,
+  windowMs: 15 * 60 * 1000, max: 2000,   // 2000 req per 15 min per IP
   standardHeaders: true, legacyHeaders: false,
   message: { ok: false, error: "Too many requests, please try again later." },
+  skip: (req) => {
+    // Skip rate limit for game result + bet endpoints (high frequency)
+    return req.path === "/api/wallet/result" || req.path === "/api/wallet/bet";
+  },
+});
+
+// Separate higher limit for game play endpoints
+const gameLimiter = rateLimit({
+  windowMs: 60 * 1000, max: 300,   // 300 game calls per minute
+  standardHeaders: true, legacyHeaders: false,
+  message: { ok: false, error: "Too many game requests, please slow down." },
 });
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, max: 20,
@@ -76,7 +87,7 @@ app.use("/api/auth",         authLimiter, authRoutes);
 app.use("/api/games",        gameRoutes);
 app.use("/api/stats",        statsRoutes);
 app.use("/api/user",         userRoutes);
-app.use("/api/wallet",       walletRoutes);
+app.use("/api/wallet",       gameLimiter, walletRoutes);  // higher limit for game play
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/missions",     missionRoutes);
 app.use("/api/referral",     referralRoutes);
