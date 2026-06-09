@@ -14,8 +14,12 @@ const getReferralStats = async (req, res) => {
       ReferralModel.countTodayByReferrer(userId),
     ]);
 
-    // Commission: PKR 30 per direct referral (simplified — extend for bet-based commission)
-    const totalEarned = directRefs * 30;
+    // Commission tiers based on total referrals
+    let ratePerRef = 100; // PKR 100 for 1-5 refs
+    if (directRefs > 50)      ratePerRef = 300;
+    else if (directRefs > 20) ratePerRef = 200;
+    else if (directRefs > 5)  ratePerRef = 150;
+    const totalEarned = directRefs * ratePerRef;
 
     return success(res, {
       totalEarned,

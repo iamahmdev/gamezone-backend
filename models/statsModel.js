@@ -15,7 +15,7 @@ const StatsModel = {
         Transaction.distinct("userId", {
           type: "bet",
           createdAt: { $gte: new Date(Date.now() - 10 * 60 * 1000) },
-        }).then(arr => Math.max(arr.length, 5)),
+        }).then(arr => arr.length),
 
         // Unique users who had a win today
         Transaction.distinct("userId", {
