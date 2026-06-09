@@ -36,8 +36,8 @@ const StatsModel = {
         bigWin:       bigWinResult?.amount || 0,
       };
     } catch {
-      // Fallback if DB not ready yet
-      return { onlineNow: 12, todayWinners: 3, bigWin: 0 };
+      // Fallback if DB not ready yet — return real zeros, no fake numbers
+      return { onlineNow: 0, todayWinners: 0, bigWin: 0 };
     }
   },
 

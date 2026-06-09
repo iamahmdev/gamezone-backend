@@ -7,6 +7,8 @@ const transactionSchema = new mongoose.Schema(
     label:    { type: String, required: true },
     amount:   { type: Number, required: true },
     positive: { type: Boolean, required: true },
+    // Game slug — stored for bets/wins so online counts can be computed per game
+    game:     { type: String, default: "" },
     // Admin approval fields (for deposit and withdraw)
     status:   { type: String, default: "completed", enum: ["pending", "completed", "rejected"] },
     adminNote: { type: String, default: "" },
@@ -19,6 +21,8 @@ const transactionSchema = new mongoose.Schema(
 
 // Index for fast per-user queries
 transactionSchema.index({ userId: 1, createdAt: -1 });
+// Index for game online count aggregation
+transactionSchema.index({ type: 1, game: 1, createdAt: -1 });
 
 const Transaction = mongoose.model("Transaction", transactionSchema);
 
@@ -35,8 +39,8 @@ const TransactionModel = {
       .lean();
   },
 
-  async create(userId, { type, label, amount, positive, status = "completed", method = "", accountNumber = "", accountName = "" }) {
-    const tx = await Transaction.create({ userId, type, label, amount, positive, status, method, accountNumber, accountName });
+  async create(userId, { type, label, amount, positive, status = "completed", method = "", accountNumber = "", accountName = "", game = "" }) {
+    const tx = await Transaction.create({ userId, type, label, amount, positive, status, method, accountNumber, accountName, game });
     return tx.toObject();
   },
 

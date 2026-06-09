@@ -1,10 +1,10 @@
 const GameModel          = require("../models/gameModel");
 const { success, error } = require("../utils/response");
 
-const getAllGames = (req, res) => {
+const getAllGames = async (req, res) => {
   try {
     const { category, popular } = req.query;
-    const games = GameModel.getAll({
+    const games = await GameModel.getAll({
       category:  category || null,
       popular:   popular === "true" ? true : undefined,
     });
@@ -14,9 +14,9 @@ const getAllGames = (req, res) => {
   }
 };
 
-const getGameBySlug = (req, res) => {
+const getGameBySlug = async (req, res) => {
   try {
-    const game = GameModel.getBySlug(req.params.slug);
+    const game = await GameModel.getBySlug(req.params.slug);
     if (!game) return error(res, "Game not found", 404);
     return success(res, game);
   } catch (e) {

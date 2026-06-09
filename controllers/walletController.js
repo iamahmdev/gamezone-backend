@@ -116,7 +116,7 @@ const placeBet = async (req, res) => {
     if (!walletAfterBet) return error(res, "Insufficient balance");
 
     await TransactionModel.create(req.userId, {
-      type: "bet", label: `${gameName} Bet`, amount: betAmt, positive: false,
+      type: "bet", label: `${gameName} Bet`, amount: betAmt, positive: false, game: gameName,
     });
 
     let finalWallet = walletAfterBet;
@@ -125,7 +125,7 @@ const placeBet = async (req, res) => {
       const winAmt = Number(payout);
       finalWallet  = await WalletModel.creditWin(req.userId, winAmt);
       await TransactionModel.create(req.userId, {
-        type: "win", label: `${gameName} Win`, amount: winAmt, positive: true,
+        type: "win", label: `${gameName} Win`, amount: winAmt, positive: true, game: gameName,
       });
     }
 
