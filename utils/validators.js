@@ -1,7 +1,7 @@
 const validateRegister = ({ username, mobile, password }) => {
   if (!username || !mobile || !password)        return "username, mobile and password are required";
   if (username.trim().length < 3)               return "Username must be at least 3 characters";
-  if (!/^\d{10}$/.test(mobile))                 return "Enter a valid 10-digit mobile number";
+  if (!/^\d{10,11}$/.test(mobile))              return "Enter a valid 10-11 digit mobile number";
   if (password.length < 6)                      return "Password must be at least 6 characters";
   return null;
 };
