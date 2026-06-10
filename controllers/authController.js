@@ -13,6 +13,11 @@ const { BCRYPT_ROUNDS, WELCOME_BONUS, ADMIN_MOBILES } = require("../config/const
 // POST /api/auth/register
 const register = async (req, res) => {
   try {
+    // Trim all inputs before validation
+    if (req.body.username) req.body.username = req.body.username.trim();
+    if (req.body.mobile)   req.body.mobile   = req.body.mobile.trim();
+    if (req.body.password) req.body.password = req.body.password.trim();
+
     const err = validateRegister(req.body);
     if (err) return error(res, err);
 
@@ -70,10 +75,10 @@ const login = async (req, res) => {
     const { mobile, password } = req.body;
 
     // ── Special admin login via email ─────────────────────────────────────
-    const ADMIN_EMAIL    = process.env.ADMIN_EMAIL    || "admin@gmail.com";
-    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
+    const ADMIN_EMAIL    = (process.env.ADMIN_EMAIL    || "admin@gmail.com").trim().toLowerCase();
+    const ADMIN_PASSWORD =  process.env.ADMIN_PASSWORD || "admin123";
 
-    if (mobile === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+    if (mobile.trim().toLowerCase() === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
       // Find or create the admin account
       let adminUser = await UserModel.findByMobile("00000000000");
       if (!adminUser) {
@@ -91,24 +96,23 @@ const login = async (req, res) => {
         ]);
         await UserModel.setAdmin(adminId, true);
         adminUser = await UserModel.findByMobile("00000000000");
-        if (!adminUser || !adminUser.isAdmin) {
-          return error(res, "Admin setup failed, please retry", 500);
-        }
       }
-      // Ensure admin flag is set
+      // Ensure admin flag is always set
       const adminId = (adminUser._id || adminUser.id).toString();
       if (!adminUser.isAdmin) {
         await UserModel.setAdmin(adminId, true);
         adminUser = await UserModel.findById(adminId);
       }
       await UserModel.updateLastLogin(adminId);
+      // Ensure wallet exists
+      await WalletModel.init(adminId);
       const adminWallet = await WalletModel.getByUserId(adminId);
       const token = signToken(adminId);
       return success(res, { token, user: UserModel.safe(adminUser), wallet: adminWallet });
     }
     // ─────────────────────────────────────────────────────────────────────
 
-    const user = await UserModel.findByMobile(mobile);
+    const user = await UserModel.findByMobile(mobile.trim());
     if (!user) return error(res, "Invalid mobile or password", 401);
 
     const match = await bcrypt.compare(password, user.passwordHash);
@@ -120,7 +124,7 @@ const login = async (req, res) => {
     const userId = (user._id || user.id).toString();
 
     // Auto-promote to admin if mobile is in ADMIN_MOBILES env list
-    if (ADMIN_MOBILES.length > 0 && ADMIN_MOBILES.includes(mobile) && !user.isAdmin) {
+    if (ADMIN_MOBILES.length > 0 && ADMIN_MOBILES.includes(mobile.trim()) && !user.isAdmin) {
       await UserModel.setAdmin(userId, true);
       user.isAdmin = true;
     }
